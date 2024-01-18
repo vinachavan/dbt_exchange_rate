@@ -5,15 +5,18 @@ from datetime import datetime, timedelta
 import psycopg2
 import sqlalchemy
 import time
-
+import configparser
+config = configparser.ConfigParser()
+config.read('dbt_config')
 HOSTNAME = os.environ['DBT_HOST']
 USERNAME = os.environ['DBT_USER']
 PASSWORD = os.environ['DBT_PASS']
-DATABASE = "hhieaprsdbd01"
-PORT = 25881
+DATABASE = config['dev']['database']
+PORT = config['dev']['port']
 
-URL="https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date="
-
+# URL="https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date="
+URL = config['dev']['api_url']
+##proper commenting
 class ExchangeRateDatesCZ:
     def __init__(self, table_name='exchange_rates'):
         #initial values to be set
