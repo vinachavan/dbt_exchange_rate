@@ -1,0 +1,7 @@
+
+version: 2
+
+models:
+  - name: weekly_matrices
+    description: "Showing weekly matrices of exchange rate"
+
