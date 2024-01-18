@@ -34,10 +34,16 @@ class ExchangeRateDatesCZ:
         self.date = date
     
     # To get the exchange rate data from API based on date
+    # Retuning response from API in padas DataFrame object
     def get_exchange_rate(self, date):
         # Reading the csv file into dataframe of pandas library 
-        df = pd.read_csv(f"{URL}{date}", skiprows = 1, delimiter='|')
-        return df        
+        df=pd.DataFrame()
+        try:
+            df = pd.read_csv(f"{URL}{date}", skiprows = 1, delimiter='|')
+        except Exception as e:
+            print ('Caught exception while calling API:', e) 
+            raise e
+        return df
 
     # As we can see there are only exchange rate data 
     # available for weekdays, so pulling only weekdays date 
@@ -66,6 +72,29 @@ class ExchangeRateDatesCZ:
     # Get the exchange data from last 3 months and 
     # store it into Reshift database
     def load_3month_data(self):
+        try:
+            # Call the method to get the dates
+            datefromthreemonths = self.weekdays_from_3months()
+            # Empty dataframe to store all the data based on date
+            result_df = pd.DataFrame()
+            for date in datefromthreemonths:
+                # Pulling exchange rate for each day
+                df = self.get_exchange_rate(date)
+                # Adding another column to check the exchange date
+                df['exchange_date'] = date
+                df['kurz'] = pd.to_numeric(df['kurz'].str.replace(',', ''), errors='coerce')
+                # Appending all dataframes in sigle set
+                result_df = pd.concat([result_df, df], ignore_index=True)
+            
+            print(result_df)
+            
+            # Create connection to redshift
+            engine = sqlalchemy.create_engine(f'postgresql://{USERNAME}:{PASSWORD}@{HOSTNAME}:{PORT}/{DATABASE}')
+            # Store data into redshift
+            result_df.to_sql(name=self.table_name, con=engine, if_exists='replace', index=False, schema='public')
+        except Exception as e:
+            print ('Caught exception while processing:', e) 
+            raise e
         # Call the method to get the dates
         datefromthreemonths = self.weekdays_from_3months()
         # Empty dataframe to store all the data based on date
@@ -91,6 +120,9 @@ if __name__ == '__main__':
     
     date = "16.01.2024"
     start = time.perf_counter()
+    # With Parameter
+    # erd = ExchangeRateDatesCZ(date)
+    # Without Parameter
     erd = ExchangeRateDatesCZ()
     erd.load_3month_data()
     end = time.perf_counter() - start
