@@ -1,3 +1,8 @@
+'''
+@Auther - Vinayak Chavan
+@Date - 18-Jan-2024
+@Description - This will fetch exchange data for Czech Republic and store it into database
+'''
 import pandas as pd
 import os
 import unicodedata
@@ -6,6 +11,8 @@ import psycopg2
 import sqlalchemy
 import time
 import configparser
+
+# Reading configuration file
 config = configparser.ConfigParser()
 config.read('dbt_config')
 HOSTNAME = os.environ['DBT_HOST']
@@ -13,65 +20,73 @@ USERNAME = os.environ['DBT_USER']
 PASSWORD = os.environ['DBT_PASS']
 DATABASE = config['dev']['database']
 PORT = config['dev']['port']
-
-# URL="https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date="
 URL = config['dev']['api_url']
-##proper commenting
+
+
+# This class is responsible to fetch the data from API i.e.
+# (https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=16.01.2024)
+# and store it into the database.
+# 
 class ExchangeRateDatesCZ:
-    def __init__(self, table_name='exchange_rates'):
-        #initial values to be set
-        self.table_name = table_name
-        self.redshift_connection_params={
-            'host': HOSTNAME,
-            'port': PORT,
-            'user': USERNAME,
-            'password': PASSWORD,
-            'database': DATABASE
-        }
+    def __init__(self, date=None):
+        # Initial values to be set
+        self.table_name = config['dev']['table_name']
+        self.date = date
     
-    # to get the data from API based on date
+    # To get the exchange rate data from API based on date
     def get_exchange_rate(self, date):
-        #reading the csv file into dataframe of pandas library 
+        # Reading the csv file into dataframe of pandas library 
         df = pd.read_csv(f"{URL}{date}", skiprows = 1, delimiter='|')
         return df        
 
-    #Get weekdays dates only 
+    # As we can see there are only exchange rate data 
+    # available for weekdays, so pulling only weekdays date 
     def weekdays_from_3months(self):
-        #choose start and end date for getting exchange data information 
-        end_date = datetime.now() - timedelta(days=1)
+        # Choose start and end date for getting exchange
+        # data information 
+        end_date = datetime.now()
+        if self.date == None:
+            end_date = datetime.now() - timedelta(days=1)
+        else:
+            end_date = datetime.strptime(self.date, "%d.%m.%Y")
+        # Pulling 3 months back date
         start_date = end_date - timedelta(days=90)
         weekdays_dates = []
         current_date = start_date
-        #considering only weekdays
+        # Fetching all the dates from last 3 months and 
+        # putting into list
         while current_date <= end_date:
+            # Checking for weekdays date
             if current_date.weekday() < 5 :
                 weekdays_dates.append(current_date.strftime("%d.%m.%Y"))
             
             current_date += timedelta(days=1)
         return weekdays_dates
 
-    #Get the exchange data for 3 months and store it into Reshift
+    # Get the exchange data from last 3 months and 
+    # store it into Reshift database
     def load_3month_data(self):
-        #call the method to get the dates
+        # Call the method to get the dates
         datefromthreemonths = self.weekdays_from_3months()
-        #emtry dataframe to store all the data based on date
+        # Empty dataframe to store all the data based on date
         result_df = pd.DataFrame()
         for date in datefromthreemonths:
+            # Pulling exchange rate for each day
             df = self.get_exchange_rate(date)
-            #adding another column to check the exchange date
+            # Adding another column to check the exchange date
             df['exchange_date'] = date
             df['kurz'] = pd.to_numeric(df['kurz'].str.replace(',', ''), errors='coerce')
-            #appenging all dataframes in sigle set
+            # Appending all dataframes in sigle set
             result_df = pd.concat([result_df, df], ignore_index=True)
         
         print(result_df)
         
-        #create connection to redshift
+        # Create connection to redshift
         engine = sqlalchemy.create_engine(f'postgresql://{USERNAME}:{PASSWORD}@{HOSTNAME}:{PORT}/{DATABASE}')
-        #store data into redshift
+        # Store data into redshift
         result_df.to_sql(name=self.table_name, con=engine, if_exists='replace', index=False, schema='public')
 
-# unit testing for module
+# Unit testing for module
 if __name__ == '__main__':
     
     date = "16.01.2024"

@@ -1,4 +1,5 @@
 [dev]
 database = <database_name>
+table_name = exchange_rates
 port = 25881
 api_url = https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=
